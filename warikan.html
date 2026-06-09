@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>旅行割り勘</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --primary: #4f7dff;
+    --primary-dark: #3a63e0;
+    --danger: #ff5252;
+    --success: #4caf50;
+    --bg: #f0f2f8;
+    --card: #ffffff;
+    --text: #1a1a2e;
+    --subtext: #6b7280;
+    --border: #e5e7eb;
+    --shadow: 0 2px 12px rgba(0,0,0,0.08);
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding-bottom: 80px;
+  }
+
+  /* ヘッダー */
+  header {
+    background: linear-gradient(135deg, #4f7dff 0%, #7c5cfc 100%);
+    color: white;
+    padding: 20px 16px 16px;
+    text-align: center;
+  }
+  header h1 { font-size: 22px; font-weight: 700; letter-spacing: 0.5px; }
+  header p  { font-size: 13px; opacity: 0.85; margin-top: 3px; }
+
+  /* タブナビ */
+  nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: white;
+    display: flex;
+    border-top: 1px solid var(--border);
+    z-index: 100;
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
+  }
+  nav button {
+    flex: 1;
+    background: none;
+    border: none;
+    padding: 10px 4px 8px;
+    font-size: 10px;
+    color: var(--subtext);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    transition: color 0.2s;
+  }
+  nav button.active { color: var(--primary); }
+  nav button .icon { font-size: 22px; }
+  nav button .label { font-size: 10px; font-weight: 600; }
+
+  /* コンテンツ */
+  .page { display: none; padding: 16px; animation: fadeIn 0.2s ease; }
+  .page.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* カード */
+  .card {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: var(--shadow);
+    margin-bottom: 12px;
+  }
+  .card-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--subtext);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 12px;
+  }
+
+  /* フォーム */
+  .input-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  input, select {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    font-size: 15px;
+    background: white;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  input:focus, select:focus { border-color: var(--primary); }
+  select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
+
+  .btn {
+    padding: 12px 20px;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn:active { transform: scale(0.96); }
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-primary:active { background: var(--primary-dark); }
+  .btn-full { width: 100%; }
+  .btn-danger { background: #fff0f0; color: var(--danger); font-size: 13px; padding: 6px 12px; border-radius: 8px; }
+
+  /* メンバーリスト */
+  .member-chip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: #f8f9ff;
+    border-radius: 10px;
+    margin-bottom: 6px;
+  }
+  .member-chip .name { font-size: 15px; font-weight: 600; }
+  .member-chip .paid { font-size: 12px; color: var(--subtext); margin-top: 1px; }
+  .avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 700; color: white;
+    margin-right: 10px; flex-shrink: 0;
+  }
+  .chip-left { display: flex; align-items: center; }
+
+  /* 支出リスト */
+  .expense-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    background: #f8f9ff;
+    border-radius: 12px;
+    margin-bottom: 8px;
+  }
+  .expense-info { flex: 1; }
+  .expense-desc { font-size: 15px; font-weight: 600; }
+  .expense-meta { font-size: 12px; color: var(--subtext); margin-top: 2px; }
+  .expense-amount { font-size: 18px; font-weight: 700; color: var(--primary); margin: 0 12px; }
+
+  /* 精算 */
+  .settlement-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px;
+    background: #f8f9ff;
+    border-radius: 12px;
+    margin-bottom: 8px;
+  }
+  .settlement-row .from { font-weight: 700; font-size: 15px; }
+  .settlement-row .arrow { color: var(--primary); font-size: 18px; }
+  .settlement-row .to { font-weight: 700; font-size: 15px; }
+  .settlement-row .amount { margin-left: auto; font-size: 17px; font-weight: 700; color: var(--primary); }
+
+  .summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .summary-box {
+    background: #f8f9ff;
+    border-radius: 12px;
+    padding: 12px;
+    text-align: center;
+  }
+  .summary-box .label { font-size: 11px; color: var(--subtext); margin-bottom: 4px; }
+  .summary-box .value { font-size: 20px; font-weight: 700; color: var(--text); }
+
+  .balance-bar {
+    padding: 10px 12px;
+    border-radius: 10px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .balance-bar.positive { background: #e8f5e9; }
+  .balance-bar.negative { background: #ffeaea; }
+  .balance-bar.zero    { background: #f3f4f6; }
+  .balance-bar .bal-name { font-size: 14px; font-weight: 600; }
+  .balance-bar .bal-val  { font-size: 15px; font-weight: 700; }
+  .balance-bar.positive .bal-val { color: var(--success); }
+  .balance-bar.negative .bal-val { color: var(--danger); }
+
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--subtext);
+  }
+  .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-state p { font-size: 14px; }
+
+  .section-sep { height: 1px; background: var(--border); margin: 12px 0; }
+
+  .badge {
+    display: inline-block;
+    background: var(--primary);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 90px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #1a1a2e;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 24px;
+    font-size: 13px;
+    font-weight: 600;
+    opacity: 0;
+    transition: all 0.3s;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 200;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .all-settled {
+    text-align: center;
+    padding: 30px 20px;
+    background: linear-gradient(135deg, #e8f5e9, #f1f8e9);
+    border-radius: 16px;
+  }
+  .all-settled .icon { font-size: 56px; margin-bottom: 10px; }
+  .all-settled p { font-size: 16px; font-weight: 700; color: var(--success); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>✈️ 旅行割り勘</h1>
+  <p>みんなの支出を公平に分けよう</p>
+</header>
+
+<!-- メンバーページ -->
+<div id="page-members" class="page active">
+  <div class="card">
+    <div class="card-title">メンバーを追加</div>
+    <div class="input-row">
+      <input id="member-input" type="text" placeholder="名前を入力" maxlength="20">
+      <button class="btn btn-primary" onclick="addMember()">追加</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">メンバー一覧 <span id="member-count" class="badge">0</span></div>
+    <div id="member-list">
+      <div class="empty-state">
+        <div class="icon">👥</div>
+        <p>メンバーを追加してください</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 支出ページ -->
+<div id="page-expenses" class="page">
+  <div class="card">
+    <div class="card-title">支出を記録</div>
+    <select id="expense-payer" style="margin-bottom:8px">
+      <option value="">支払った人を選択</option>
+    </select>
+    <input id="expense-desc" type="text" placeholder="内容（例：ランチ、タクシー）" style="margin-bottom:8px" maxlength="40">
+    <div class="input-row">
+      <input id="expense-amount" type="number" placeholder="金額（円）" min="1" style="flex:1">
+      <button class="btn btn-primary" onclick="addExpense()">追加</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">支出履歴 <span id="expense-count" class="badge">0</span></div>
+    <div id="expense-list">
+      <div class="empty-state">
+        <div class="icon">🧾</div>
+        <p>支出を記録してください</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 精算ページ -->
+<div id="page-settle" class="page">
+  <div id="settle-content">
+    <div class="empty-state" style="padding-top:60px">
+      <div class="icon">💰</div>
+      <p>メンバーと支出を追加すると<br>精算方法が表示されます</p>
+    </div>
+  </div>
+</div>
+
+<!-- ナビゲーション -->
+<nav>
+  <button class="active" onclick="switchPage('members', this)">
+    <span class="icon">👥</span>
+    <span class="label">メンバー</span>
+  </button>
+  <button onclick="switchPage('expenses', this)">
+    <span class="icon">🧾</span>
+    <span class="label">支出</span>
+  </button>
+  <button onclick="switchPage('settle', this)">
+    <span class="icon">💰</span>
+    <span class="label">精算</span>
+  </button>
+</nav>
+
+<div id="toast" class="toast"></div>
+
+<script>
+  const COLORS = ['#4f7dff','#7c5cfc','#ff7043','#26c6da','#66bb6a','#ffa726','#ef5350','#ab47bc'];
+
+  let state = JSON.parse(localStorage.getItem('warikan') || '{"members":[],"expenses":[]}');
+
+  function save() {
+    localStorage.setItem('warikan', JSON.stringify(state));
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2000);
+  }
+
+  function colorFor(name) {
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
+    return COLORS[Math.abs(h) % COLORS.length];
+  }
+
+  function initials(name) {
+    return name.slice(0, 1).toUpperCase();
+  }
+
+  // ---- ページ切替 ----
+  function switchPage(name, btn) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+    document.getElementById('page-' + name).classList.add('active');
+    btn.classList.add('active');
+    if (name === 'expenses') renderExpenseForm();
+    if (name === 'settle')   renderSettle();
+  }
+
+  // ---- メンバー ----
+  function addMember() {
+    const input = document.getElementById('member-input');
+    const name = input.value.trim();
+    if (!name) { showToast('名前を入力してください'); return; }
+    if (state.members.includes(name)) { showToast('同じ名前のメンバーがいます'); return; }
+    state.members.push(name);
+    save();
+    input.value = '';
+    renderMembers();
+    showToast(`${name} を追加しました`);
+  }
+
+  function removeMember(name) {
+    if (state.expenses.some(e => e.payer === name)) {
+      showToast(`${name} の支出記録があるため削除できません`);
+      return;
+    }
+    state.members = state.members.filter(m => m !== name);
+    save();
+    renderMembers();
+    showToast(`${name} を削除しました`);
+  }
+
+  function renderMembers() {
+    const list = document.getElementById('member-list');
+    document.getElementById('member-count').textContent = state.members.length;
+    if (state.members.length === 0) {
+      list.innerHTML = '<div class="empty-state"><div class="icon">👥</div><p>メンバーを追加してください</p></div>';
+      return;
+    }
+    const totals = {};
+    state.members.forEach(m => totals[m] = 0);
+    state.expenses.forEach(e => { if (totals[e.payer] !== undefined) totals[e.payer] += e.amount; });
+
+    list.innerHTML = state.members.map(m => `
+      <div class="member-chip">
+        <div class="chip-left">
+          <div class="avatar" style="background:${colorFor(m)}">${initials(m)}</div>
+          <div>
+            <div class="name">${esc(m)}</div>
+            <div class="paid">支払済: ¥${totals[m].toLocaleString()}</div>
+          </div>
+        </div>
+        <button class="btn btn-danger" onclick="removeMember('${esc(m)}')">削除</button>
+      </div>
+    `).join('');
+  }
+
+  // ---- 支出 ----
+  function renderExpenseForm() {
+    const sel = document.getElementById('expense-payer');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">支払った人を選択</option>' +
+      state.members.map(m => `<option value="${esc(m)}" ${m===current?'selected':''}>${esc(m)}</option>`).join('');
+  }
+
+  function addExpense() {
+    const payer  = document.getElementById('expense-payer').value;
+    const desc   = document.getElementById('expense-desc').value.trim();
+    const amount = parseFloat(document.getElementById('expense-amount').value);
+
+    if (!payer)          { showToast('支払った人を選択してください'); return; }
+    if (!desc)           { showToast('内容を入力してください'); return; }
+    if (!amount || amount <= 0) { showToast('正しい金額を入力してください'); return; }
+
+    state.expenses.push({ id: Date.now(), payer, desc, amount: Math.round(amount) });
+    save();
+    document.getElementById('expense-desc').value = '';
+    document.getElementById('expense-amount').value = '';
+    renderExpenses();
+    renderMembers();
+    showToast('支出を追加しました');
+  }
+
+  function removeExpense(id) {
+    state.expenses = state.expenses.filter(e => e.id !== id);
+    save();
+    renderExpenses();
+    renderMembers();
+    showToast('支出を削除しました');
+  }
+
+  function renderExpenses() {
+    const list = document.getElementById('expense-list');
+    document.getElementById('expense-count').textContent = state.expenses.length;
+    if (state.expenses.length === 0) {
+      list.innerHTML = '<div class="empty-state"><div class="icon">🧾</div><p>支出を記録してください</p></div>';
+      return;
+    }
+    list.innerHTML = [...state.expenses].reverse().map(e => `
+      <div class="expense-item">
+        <div class="avatar" style="background:${colorFor(e.payer)};width:36px;height:36px;font-size:14px;margin-right:10px;flex-shrink:0">${initials(e.payer)}</div>
+        <div class="expense-info">
+          <div class="expense-desc">${esc(e.desc)}</div>
+          <div class="expense-meta">${esc(e.payer)} が支払い</div>
+        </div>
+        <div class="expense-amount">¥${e.amount.toLocaleString()}</div>
+        <button class="btn btn-danger" onclick="removeExpense(${e.id})">削除</button>
+      </div>
+    `).join('');
+  }
+
+  // ---- 精算計算 ----
+  function calcSettlement() {
+    const n = state.members.length;
+    if (n < 2 || state.expenses.length === 0) return null;
+
+    const total = state.expenses.reduce((s, e) => s + e.amount, 0);
+    const share = total / n;
+
+    const paid = {};
+    state.members.forEach(m => paid[m] = 0);
+    state.expenses.forEach(e => { if (paid[e.payer] !== undefined) paid[e.payer] += e.amount; });
+
+    // net balance (正=受取, 負=支払)
+    const balance = {};
+    state.members.forEach(m => { balance[m] = paid[m] - share; });
+
+    // 最小回数の精算
+    const transactions = [];
+    const creditors = state.members.filter(m => balance[m] > 0.5).map(m => ({ name: m, amount: balance[m] }));
+    const debtors   = state.members.filter(m => balance[m] < -0.5).map(m => ({ name: m, amount: -balance[m] }));
+
+    creditors.sort((a, b) => b.amount - a.amount);
+    debtors.sort((a, b) => b.amount - a.amount);
+
+    let ci = 0, di = 0;
+    while (ci < creditors.length && di < debtors.length) {
+      const c = creditors[ci], d = debtors[di];
+      const amount = Math.min(c.amount, d.amount);
+      transactions.push({ from: d.name, to: c.name, amount: Math.round(amount) });
+      c.amount -= amount;
+      d.amount -= amount;
+      if (c.amount < 0.5) ci++;
+      if (d.amount < 0.5) di++;
+    }
+
+    return { total, share, paid, balance, transactions };
+  }
+
+  function renderSettle() {
+    const content = document.getElementById('settle-content');
+    const n = state.members.length;
+
+    if (n < 2) {
+      content.innerHTML = '<div class="empty-state" style="padding-top:60px"><div class="icon">👥</div><p>2人以上のメンバーを追加してください</p></div>';
+      return;
+    }
+    if (state.expenses.length === 0) {
+      content.innerHTML = '<div class="empty-state" style="padding-top:60px"><div class="icon">🧾</div><p>支出を追加してください</p></div>';
+      return;
+    }
+
+    const { total, share, paid, balance, transactions } = calcSettlement();
+
+    let html = '';
+
+    // サマリー
+    html += `<div class="card">
+      <div class="card-title">旅行の概要</div>
+      <div class="summary-grid">
+        <div class="summary-box">
+          <div class="label">合計金額</div>
+          <div class="value" style="font-size:18px">¥${total.toLocaleString()}</div>
+        </div>
+        <div class="summary-box">
+          <div class="label">1人あたり</div>
+          <div class="value" style="font-size:18px">¥${Math.round(share).toLocaleString()}</div>
+        </div>
+      </div>`;
+
+    // 各自のバランス
+    html += '<div class="card-title" style="margin-top:4px">各自の収支</div>';
+    state.members.forEach(m => {
+      const b = balance[m];
+      const cls = b > 0.5 ? 'positive' : b < -0.5 ? 'negative' : 'zero';
+      const sign = b > 0.5 ? '+' : '';
+      html += `<div class="balance-bar ${cls}">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="avatar" style="background:${colorFor(m)};width:30px;height:30px;font-size:13px">${initials(m)}</div>
+          <span class="bal-name">${esc(m)}</span>
+        </div>
+        <span class="bal-val">${sign}¥${Math.round(Math.abs(b)).toLocaleString()} ${b > 0.5 ? '受取' : b < -0.5 ? '支払' : '±0'}</span>
+      </div>`;
+    });
+    html += '</div>';
+
+    // 精算
+    html += `<div class="card"><div class="card-title">精算方法</div>`;
+    if (transactions.length === 0) {
+      html += `<div class="all-settled"><div class="icon">🎉</div><p>全員の支払いは均等です！<br>精算不要です</p></div>`;
+    } else {
+      transactions.forEach(t => {
+        html += `<div class="settlement-row">
+          <div class="avatar" style="background:${colorFor(t.from)};width:32px;height:32px;font-size:13px">${initials(t.from)}</div>
+          <span class="from">${esc(t.from)}</span>
+          <span class="arrow">→</span>
+          <div class="avatar" style="background:${colorFor(t.to)};width:32px;height:32px;font-size:13px">${initials(t.to)}</div>
+          <span class="to">${esc(t.to)}</span>
+          <span class="amount">¥${t.amount.toLocaleString()}</span>
+        </div>`;
+      });
+    }
+    html += '</div>';
+
+    content.innerHTML = html;
+  }
+
+  // XSS対策
+  function esc(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  // Enterキーで追加
+  document.getElementById('member-input').addEventListener('keydown', e => { if (e.key === 'Enter') addMember(); });
+  document.getElementById('expense-amount').addEventListener('keydown', e => { if (e.key === 'Enter') addExpense(); });
+
+  // 初期描画
+  renderMembers();
+  renderExpenses();
+</script>
+</body>
+</html>
