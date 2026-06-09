@@ -170,7 +170,18 @@
   .expense-info { flex: 1; }
   .expense-desc { font-size: 15px; font-weight: 600; }
   .expense-meta { font-size: 12px; color: var(--subtext); margin-top: 2px; }
+  .expense-splits { font-size: 11px; color: var(--subtext); margin-top: 3px; line-height: 1.6; }
   .expense-amount { font-size: 18px; font-weight: 700; color: var(--primary); margin: 0 12px; }
+
+  /* ---- 傾斜配分フォーム ---- */
+  .split-toggle { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--subtext); cursor: pointer; margin-top: 8px; }
+  .split-toggle input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--primary); flex-shrink: 0; }
+  .split-section { margin-top: 10px; padding: 12px; background: #f8f9ff; border-radius: 10px; }
+  .split-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .split-name { font-size: 14px; font-weight: 600; min-width: 56px; flex-shrink: 0; }
+  .split-row input { padding: 8px 10px; font-size: 14px; }
+  .split-total-bar { font-size: 12px; font-weight: 600; padding: 6px 10px; border-radius: 8px; margin-top: 4px; text-align: center; background: #e8f5e9; color: var(--success); }
+  .split-total-bar.ng { background: #ffeaea; color: var(--danger); }
 
   /* ---- 精算 ---- */
   .settlement-row { display: flex; align-items: center; gap: 8px; padding: 14px; background: #f8f9ff; border-radius: 12px; margin-bottom: 8px; }
@@ -179,8 +190,7 @@
   .settlement-row .to { font-weight: 700; font-size: 15px; }
   .settlement-row .amount { margin-left: auto; font-size: 17px; font-weight: 700; color: var(--primary); }
 
-  .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
-  .summary-box { background: #f8f9ff; border-radius: 12px; padding: 12px; text-align: center; }
+  .summary-box { background: #f8f9ff; border-radius: 12px; padding: 12px; text-align: center; margin-bottom: 12px; }
   .summary-box .label { font-size: 11px; color: var(--subtext); margin-bottom: 4px; }
   .summary-box .value { font-size: 20px; font-weight: 700; color: var(--text); }
 
@@ -275,9 +285,14 @@
     </select>
     <input id="expense-desc" type="text" placeholder="内容（例：ランチ、タクシー）" style="margin-bottom:8px" maxlength="40">
     <div class="input-row">
-      <input id="expense-amount" type="number" placeholder="金額（円）" min="1" style="flex:1">
+      <input id="expense-amount" type="number" placeholder="金額（円）" min="1" style="flex:1" oninput="onAmountInput()">
       <button class="btn btn-primary" onclick="addExpense()">追加</button>
     </div>
+    <label class="split-toggle">
+      <input type="checkbox" id="expense-custom" onchange="toggleSplitMode()">
+      傾斜配分（個別に設定）
+    </label>
+    <div id="split-inputs" class="hidden split-section"></div>
   </div>
   <div class="card">
     <div class="card-title">支出履歴 <span id="expense-count" class="badge">0</span></div>
@@ -514,7 +529,7 @@
       </div>`).join('');
   }
 
-  // ---- 支出 ----
+  // ---- 支出フォーム ----
   function renderExpenseForm() {
     const sel = document.getElementById('expense-payer');
     const cur = sel.value;
@@ -522,16 +537,95 @@
       state.members.map(m => `<option value="${esc(m)}"${m===cur?' selected':''}>${esc(m)}</option>`).join('');
   }
 
+  function onAmountInput() {
+    if (document.getElementById('expense-custom').checked) {
+      updateSplitTotal();
+    }
+  }
+
+  function toggleSplitMode() {
+    const custom = document.getElementById('expense-custom').checked;
+    const splitDiv = document.getElementById('split-inputs');
+    if (custom) {
+      if (state.members.length === 0) {
+        showToast('先にメンバーを追加してください');
+        document.getElementById('expense-custom').checked = false;
+        return;
+      }
+      splitDiv.classList.remove('hidden');
+      buildSplitInputs();
+    } else {
+      splitDiv.classList.add('hidden');
+    }
+  }
+
+  function buildSplitInputs() {
+    const amount = parseInt(document.getElementById('expense-amount').value) || 0;
+    const n = state.members.length;
+    const perPerson = n > 0 ? Math.floor(amount / n) : 0;
+    const remainder = amount - perPerson * n;
+
+    document.getElementById('split-inputs').innerHTML =
+      state.members.map((m, i) => {
+        const defaultVal = perPerson + (i === 0 ? remainder : 0);
+        return `
+          <div class="split-row">
+            <div class="split-name">${esc(m)}</div>
+            <input type="number" class="split-input" data-member="${esc(m)}" value="${defaultVal}" min="0" oninput="updateSplitTotal()">
+          </div>`;
+      }).join('') + '<div id="split-total-bar" class="split-total-bar"></div>';
+
+    updateSplitTotal();
+  }
+
+  function updateSplitTotal() {
+    const amount = parseInt(document.getElementById('expense-amount').value) || 0;
+    let sum = 0;
+    document.querySelectorAll('.split-input').forEach(inp => sum += parseInt(inp.value) || 0);
+    const bar = document.getElementById('split-total-bar');
+    if (!bar) return;
+    const diff = amount - sum;
+    if (diff === 0) {
+      bar.className = 'split-total-bar';
+      bar.textContent = `合計 ¥${sum.toLocaleString()} ✓`;
+    } else {
+      bar.className = 'split-total-bar ng';
+      const sign = diff > 0 ? '+' : '';
+      bar.textContent = `合計 ¥${sum.toLocaleString()}　差額: ${sign}¥${Math.abs(diff).toLocaleString()}`;
+    }
+  }
+
+  // ---- 支出 ----
   function addExpense() {
     const payer  = document.getElementById('expense-payer').value;
     const desc   = document.getElementById('expense-desc').value.trim();
     const amount = parseFloat(document.getElementById('expense-amount').value);
+    const custom = document.getElementById('expense-custom').checked;
+
     if (!payer)               { showToast('支払った人を選択してください'); return; }
     if (!desc)                { showToast('内容を入力してください'); return; }
     if (!amount || amount<=0) { showToast('正しい金額を入力してください'); return; }
-    state.expenses.push({ id: Date.now(), payer, desc, amount: Math.round(amount) });
+
+    let splits = null;
+    if (custom) {
+      splits = {};
+      let sum = 0;
+      document.querySelectorAll('.split-input').forEach(inp => {
+        const val = parseInt(inp.value) || 0;
+        splits[inp.dataset.member] = val;
+        sum += val;
+      });
+      if (sum !== Math.round(amount)) {
+        showToast(`負担額の合計 ¥${sum.toLocaleString()} が金額 ¥${Math.round(amount).toLocaleString()} と一致しません`);
+        return;
+      }
+    }
+
+    state.expenses.push({ id: Date.now(), payer, desc, amount: Math.round(amount), splits });
     document.getElementById('expense-desc').value   = '';
     document.getElementById('expense-amount').value = '';
+    document.getElementById('expense-custom').checked = false;
+    document.getElementById('split-inputs').classList.add('hidden');
     renderExpenses();
     renderMembers();
     save();
@@ -553,33 +647,57 @@
       list.innerHTML = '<div class="empty-state"><div class="icon">🧾</div><p>支出を記録してください</p></div>';
       return;
     }
-    list.innerHTML = [...state.expenses].reverse().map(e => `
-      <div class="expense-item">
-        <div class="avatar" style="background:${colorFor(e.payer)};width:36px;height:36px;font-size:14px;margin-right:10px;flex-shrink:0">${initials(e.payer)}</div>
-        <div class="expense-info">
-          <div class="expense-desc">${esc(e.desc)}</div>
-          <div class="expense-meta">${esc(e.payer)} が支払い</div>
-        </div>
-        <div class="expense-amount">¥${e.amount.toLocaleString()}</div>
-        <button class="btn btn-danger" onclick="removeExpense(${e.id})">削除</button>
-      </div>`).join('');
+    list.innerHTML = [...state.expenses].reverse().map(e => {
+      let splitsHtml = '';
+      if (e.splits) {
+        splitsHtml = '<div class="expense-splits">' +
+          Object.entries(e.splits).map(([m, v]) => `${esc(m)}: ¥${v.toLocaleString()}`).join('　') +
+          '</div>';
+      }
+      return `
+        <div class="expense-item">
+          <div class="avatar" style="background:${colorFor(e.payer)};width:36px;height:36px;font-size:14px;margin-right:10px;flex-shrink:0">${initials(e.payer)}</div>
+          <div class="expense-info">
+            <div class="expense-desc">${esc(e.desc)}</div>
+            <div class="expense-meta">${esc(e.payer)} が支払い${e.splits ? '（傾斜配分）' : ''}</div>
+            ${splitsHtml}
+          </div>
+          <div class="expense-amount">¥${e.amount.toLocaleString()}</div>
+          <button class="btn btn-danger" onclick="removeExpense(${e.id})">削除</button>
+        </div>`;
+    }).join('');
   }
 
   // ---- 精算計算 ----
   function calcSettlement() {
     const n = state.members.length;
     if (n < 2 || state.expenses.length === 0) return null;
+
     const total = state.expenses.reduce((s, e) => s + e.amount, 0);
-    const share = total / n;
-    const paid  = {};
+
+    const paid = {};
     state.members.forEach(m => paid[m] = 0);
     state.expenses.forEach(e => { if (paid[e.payer] !== undefined) paid[e.payer] += e.amount; });
+
+    const owed = {};
+    state.members.forEach(m => owed[m] = 0);
+    state.expenses.forEach(e => {
+      if (e.splits) {
+        state.members.forEach(m => { owed[m] += (e.splits[m] || 0); });
+      } else {
+        const share = e.amount / n;
+        state.members.forEach(m => { owed[m] += share; });
+      }
+    });
+
     const balance = {};
-    state.members.forEach(m => { balance[m] = paid[m] - share; });
+    state.members.forEach(m => { balance[m] = paid[m] - owed[m]; });
+
     const creditors = state.members.filter(m => balance[m] >  0.5).map(m => ({ name: m, amount:  balance[m] }));
     const debtors   = state.members.filter(m => balance[m] < -0.5).map(m => ({ name: m, amount: -balance[m] }));
     creditors.sort((a,b) => b.amount - a.amount);
     debtors.sort((a,b)   => b.amount - a.amount);
+
     const transactions = [];
     let ci = 0, di = 0;
     while (ci < creditors.length && di < debtors.length) {
@@ -590,7 +708,7 @@
       if (c.amount < 0.5) ci++;
       if (d.amount < 0.5) di++;
     }
-    return { total, share, balance, transactions };
+    return { total, balance, transactions };
   }
 
   function renderSettle() {
@@ -603,13 +721,10 @@
       content.innerHTML = '<div class="empty-state" style="padding-top:60px"><div class="icon">🧾</div><p>支出を追加してください</p></div>';
       return;
     }
-    const { total, share, balance, transactions } = calcSettlement();
+    const { total, balance, transactions } = calcSettlement();
     let html = `<div class="card">
       <div class="card-title">旅行の概要</div>
-      <div class="summary-grid">
-        <div class="summary-box"><div class="label">合計金額</div><div class="value" style="font-size:18px">¥${total.toLocaleString()}</div></div>
-        <div class="summary-box"><div class="label">1人あたり</div><div class="value" style="font-size:18px">¥${Math.round(share).toLocaleString()}</div></div>
-      </div>
+      <div class="summary-box"><div class="label">合計金額</div><div class="value">¥${total.toLocaleString()}</div></div>
       <div class="card-title" style="margin-top:4px">各自の収支</div>`;
     state.members.forEach(m => {
       const b   = balance[m];
