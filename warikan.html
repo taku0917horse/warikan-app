@@ -231,8 +231,8 @@
 <div id="overlay-error" class="overlay hidden">
   <div class="overlay-card">
     <div class="overlay-icon">😕</div>
-    <div class="overlay-title">ルームが見つかりません</div>
-    <div class="overlay-sub">このルームは存在しないか<br>URLが正しくありません</div>
+    <div class="overlay-title" id="error-title">エラーが発生しました</div>
+    <div class="overlay-sub" id="error-detail" style="word-break:break-all;font-size:12px;background:#f8f9ff;border-radius:8px;padding:10px;text-align:left;margin-bottom:20px;color:#374151"></div>
     <button class="btn btn-primary btn-full" onclick="createRoom()" style="font-size:16px;padding:15px">
       新しいルームを作成
     </button>
@@ -315,6 +315,12 @@
 <script>
   const SUPABASE_URL = 'https://xnolsngmgwfmtocokzdl.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_amc-ftmv2uDIbhFAPyhWPg_ZNT2lFr0';
+
+  if (!window.supabase) {
+    document.getElementById('overlay-welcome').classList.add('hidden');
+    showErrMsg('ライブラリ読み込みエラー', 'Supabase JS の CDN 読み込みに失敗しました。ネットワーク接続を確認してください。');
+  }
+
   const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
   const COLORS = ['#4f7dff','#7c5cfc','#ff7043','#26c6da','#66bb6a','#ffa726','#ef5350','#ab47bc'];
@@ -331,6 +337,12 @@
     document.getElementById('app-shell').classList.add('hidden');
   }
 
+  function showErrMsg(title, detail) {
+    document.getElementById('error-title').textContent  = title;
+    document.getElementById('error-detail').textContent = detail;
+    showOverlay('error');
+  }
+
   function showApp() {
     ['welcome','loading','error'].forEach(n =>
       document.getElementById('overlay-' + n).classList.add('hidden')
@@ -345,28 +357,46 @@
 
   async function createRoom() {
     showOverlay('loading');
-    const id = generateId();
-    const { error } = await db.from('rooms').insert({ id, members: [], expenses: [] });
-    if (error) { console.error(error); showOverlay('error'); return; }
-    roomId = id;
-    state  = { members: [], expenses: [] };
-    history.pushState(null, '', '?room=' + id);
-    document.getElementById('header-room').textContent = 'Room: ' + id;
-    subscribeToRoom(id);
-    showApp();
-    renderAll();
+    try {
+      const id = generateId();
+      const { error } = await db.from('rooms').insert({ id, members: [], expenses: [] });
+      if (error) {
+        console.error('createRoom error:', error);
+        showErrMsg('ルームの作成に失敗しました', `${error.message}\n\nSupabase の rooms テーブルが存在するか、RLS ポリシーが設定されているか確認してください。`);
+        return;
+      }
+      roomId = id;
+      state  = { members: [], expenses: [] };
+      history.pushState(null, '', '?room=' + id);
+      document.getElementById('header-room').textContent = 'Room: ' + id;
+      subscribeToRoom(id);
+      showApp();
+      renderAll();
+    } catch (err) {
+      console.error('createRoom exception:', err);
+      showErrMsg('予期しないエラー', err.message || String(err));
+    }
   }
 
   async function loadRoom(id) {
     showOverlay('loading');
-    const { data, error } = await db.from('rooms').select().eq('id', id).single();
-    if (error || !data) { showOverlay('error'); return; }
-    roomId = id;
-    state  = { members: data.members || [], expenses: data.expenses || [] };
-    document.getElementById('header-room').textContent = 'Room: ' + id;
-    subscribeToRoom(id);
-    showApp();
-    renderAll();
+    try {
+      const { data, error } = await db.from('rooms').select().eq('id', id).single();
+      if (error || !data) {
+        console.error('loadRoom error:', error);
+        showErrMsg('ルームが見つかりません', error ? error.message : 'このルームは存在しないか、URLが正しくありません。');
+        return;
+      }
+      roomId = id;
+      state  = { members: data.members || [], expenses: data.expenses || [] };
+      document.getElementById('header-room').textContent = 'Room: ' + id;
+      subscribeToRoom(id);
+      showApp();
+      renderAll();
+    } catch (err) {
+      console.error('loadRoom exception:', err);
+      showErrMsg('予期しないエラー', err.message || String(err));
+    }
   }
 
   function subscribeToRoom(id) {
