@@ -355,7 +355,7 @@
     showOverlay('loading');
     try {
       const { data, error } = await db.from('rooms')
-        .insert({ name: '旅行', members: [], expenses: [] })
+        .insert({ name: 'room', members: [], expenses: [] })
         .select()
         .single();
       if (error) {
